@@ -1,0 +1,9 @@
+node_modules/
+src/
+tests/
+tsconfig.json
+eslint.config.js
+.prettierrc
+.prettierignore
+.github/
+.gitignore
