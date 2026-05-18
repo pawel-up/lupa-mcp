@@ -45,7 +45,7 @@ jobs:
         run: npx playwright install --with-deps
 
       - name: Run Node.js Orchestrator & Integration Tests
-        run: NODE_OPTIONS="--test-reporter=dot" npm run test:unit
+        run: NODE_OPTIONS="--test-reporter=dot" npm run test
 
   release:
     name: Release
