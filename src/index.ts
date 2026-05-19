@@ -5,6 +5,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod'
 import path from 'node:path'
 import fs from 'node:fs'
+import { exec } from 'node:child_process'
 import spawn from 'cross-spawn'
 
 const server = new McpServer({ name: 'lupa-mcp', version: '1.0.0' })
@@ -102,7 +103,7 @@ async function executeLupa(args: LupaArgs, isList: boolean) {
         })
       })
 
-      child.on('exit', (code: number | null) => {
+      child.on('close', (code: number | null) => {
         if (handled) return
         handled = true
         resolve({
@@ -155,6 +156,83 @@ server.registerTool(
     inputSchema: commonSchema,
   },
   async (args) => executeLupa(args as any, true)
+)
+
+async function executeInit(args: any) {
+  const { projectPath, useTypeScript, testDir, suites, reporters } = args
+
+  try {
+    if (!fs.existsSync(projectPath)) {
+      throw new Error(`Project directory not found: ${projectPath}`)
+    }
+
+    const ts = useTypeScript !== false
+    const tDir = testDir || 'tests'
+    const sList = suites && suites.length > 0 ? suites.join(',') : 'unit,browser'
+    const rList = reporters && reporters.length > 0 ? reporters.join(',') : 'dot'
+    const configPath = args.config || (ts ? 'lupa.config.ts' : 'lupa.config.js')
+
+    return await new Promise<any>((resolve) => {
+      exec(
+        `npx lupa init --config ${configPath} ${ts ? '--ts' : '--js'} --test-dir ${tDir} --suites ${sList} --reporters ${rList} --yes`,
+        { cwd: projectPath, env: process.env },
+        (error, stdout, stderr) => {
+          const configCreated = fs.existsSync(path.join(projectPath, configPath))
+
+          if (error && !configCreated) {
+            resolve({
+              content: [
+                {
+                  type: 'text' as const,
+                  text: `Init process failed: ${error.message}\nExit code: ${error.code}\nStdout: ${stdout}\nStderr: ${stderr}`,
+                },
+              ],
+              isError: true,
+            })
+          } else {
+            resolve({
+              content: [
+                {
+                  type: 'text' as const,
+                  text: `Lupa initialized successfully.\nStdout: ${stdout}${error ? `\n(Process exited with code ${error.code} but config was created)` : ''}`,
+                },
+              ],
+              isError: false,
+            })
+          }
+        }
+      )
+    })
+  } catch (error: any) {
+    return {
+      content: [
+        {
+          type: 'text' as const,
+          text: `Execution failed: ${error.message}\n${error.stack}`,
+        },
+      ],
+      isError: true,
+    }
+  }
+}
+
+server.registerTool(
+  'lupa_init',
+  {
+    description:
+      'Initializes lupa testing framework in a project with default scaffolding, avoiding interactive prompts. ' +
+      'MUST be used INSTEAD of running `npx lupa init` via terminal to ensure non-interactive execution and ' +
+      'correct default arguments.',
+    inputSchema: {
+      projectPath: z.string().describe('Absolute path to the project root where lupa should be initialized'),
+      config: z.string().optional().describe('Path to the test configuration file (default: lupa.config.ts or .js)'),
+      useTypeScript: z.boolean().optional().describe('Use TypeScript configuration and templates (default: true)'),
+      testDir: z.string().optional().describe('Directory where test files will be located (default: tests)'),
+      suites: z.array(z.string()).optional().describe('List of suite names to create (default: unit, browser)'),
+      reporters: z.array(z.string()).optional().describe('List of reporters to use (default: dot)'),
+    },
+  },
+  async (args) => executeInit(args as any)
 )
 
 async function start() {
