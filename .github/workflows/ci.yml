@@ -35,6 +35,10 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Install global lupa CLI
+        # we need the global lupa to run the integration tests 
+        run: npm install -g @pawel-up/lupa
+
       - name: Lint
         run: npm run lint
 
