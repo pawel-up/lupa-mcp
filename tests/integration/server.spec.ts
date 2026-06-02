@@ -118,4 +118,71 @@ describe('Lupa MCP Server Integration', () => {
     // Clean up
     fs.rmSync(tmpDir, { recursive: true, force: true })
   })
+
+  test('should execute lupa_list_test_files and return resolved files list', async () => {
+    const result = await client.callTool({
+      name: 'lupa_list_test_files',
+      arguments: {
+        configPath: fixturePath,
+      },
+    })
+
+    assert.equal(!!result.isError, false, (result.content as any)[0].text)
+    const files = JSON.parse((result.content as any)[0].text)
+    assert.deepEqual(files, ['tests/dummy.spec.ts'])
+  })
+
+  test('should filter test files by path using searchFiles', async () => {
+    // Matching case
+    const matchedResult = await client.callTool({
+      name: 'lupa_list_test_files',
+      arguments: {
+        configPath: fixturePath,
+        searchFiles: ['dummy'],
+      },
+    })
+    assert.equal(!!matchedResult.isError, false, (matchedResult.content as any)[0].text)
+    assert.deepEqual(JSON.parse((matchedResult.content as any)[0].text), ['tests/dummy.spec.ts'])
+
+    // Non-matching case
+    const unmatchedResult = await client.callTool({
+      name: 'lupa_list_test_files',
+      arguments: {
+        configPath: fixturePath,
+        searchFiles: ['auth'],
+      },
+    })
+    assert.equal(!!unmatchedResult.isError, false, (unmatchedResult.content as any)[0].text)
+    assert.deepEqual(JSON.parse((unmatchedResult.content as any)[0].text), [])
+  })
+
+  test('should filter tests by title using searchTests in lupa_list_tests', async () => {
+    // Matching case
+    const matchedResult = await client.callTool({
+      name: 'lupa_list_tests',
+      arguments: {
+        configPath: fixturePath,
+        searchTests: ['dummy'],
+      },
+    })
+    assert.equal(!!matchedResult.isError, false, (matchedResult.content as any)[0].text)
+    const matchedData = JSON.parse((matchedResult.content as any)[0].text)
+    assert.ok(matchedData.list.suites, 'Should return suites')
+    assert.equal(matchedData.list.suites.length, 1)
+    assert.equal(matchedData.list.suites[0].tests.length, 1)
+    assert.equal(matchedData.list.suites[0].tests[0].title, 'dummy test')
+
+    // Non-matching case
+    const unmatchedResult = await client.callTool({
+      name: 'lupa_list_tests',
+      arguments: {
+        configPath: fixturePath,
+        searchTests: ['should login'],
+      },
+    })
+    assert.equal(!!unmatchedResult.isError, false, (unmatchedResult.content as any)[0].text)
+    const unmatchedData = JSON.parse((unmatchedResult.content as any)[0].text)
+    assert.ok(unmatchedData.list.suites)
+    assert.equal(unmatchedData.list.suites.length, 0)
+  })
 })

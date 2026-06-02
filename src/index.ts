@@ -16,6 +16,9 @@ interface LupaArgs {
   suites?: string[]
   tags?: string[]
   tests?: string[]
+  filesOnly?: boolean
+  searchFiles?: string[]
+  searchTests?: string[]
 }
 import { fileURLToPath } from 'node:url'
 
@@ -23,7 +26,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const runnerScriptPath = path.join(__dirname, 'lupa-runner.js')
 
 async function executeLupa(args: LupaArgs, isList: boolean) {
-  const { configPath, files, suites, tags, tests } = args
+  const { configPath, files, suites, tags, tests, filesOnly, searchFiles, searchTests } = args
 
   try {
     if (!fs.existsSync(configPath)) {
@@ -47,6 +50,9 @@ async function executeLupa(args: LupaArgs, isList: boolean) {
           LUPA_ROOT_DIR: rootDir,
           LUPA_IS_LIST: String(isList),
           LUPA_FILTERS: JSON.stringify(filters),
+          LUPA_FILES_ONLY: String(!!(filesOnly || (searchFiles && searchFiles.length > 0))),
+          LUPA_SEARCH_FILES: searchFiles ? JSON.stringify(searchFiles) : '',
+          LUPA_SEARCH_TESTS: searchTests ? JSON.stringify(searchTests) : '',
         },
         stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
       })
@@ -153,9 +159,30 @@ server.registerTool(
   'lupa_list_tests',
   {
     description: 'List all available test files, suites, and tests without running them. Optionally filter the list.',
-    inputSchema: commonSchema,
+    inputSchema: {
+      ...commonSchema,
+      searchTests: z
+        .array(z.string())
+        .optional()
+        .describe('Filter tests by test title (supports multiple queries with OR logic)'),
+    },
   },
   async (args) => executeLupa(args as any, true)
+)
+
+server.registerTool(
+  'lupa_list_test_files',
+  {
+    description: 'List test files resolved by Lupa config without running tests or starting Vite/Playwright.',
+    inputSchema: {
+      ...commonSchema,
+      searchFiles: z
+        .array(z.string())
+        .optional()
+        .describe('Filter files by path queries (supports multiple queries with OR logic)'),
+    },
+  },
+  async (args) => executeLupa({ ...(args as any), filesOnly: true }, true)
 )
 
 async function executeInit(args: any) {
